@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pac-Man vs Ghosts · AI Search Lab</title>
+<meta name="description" content="Play Pac-Man against ghosts driven by A* search, or watch a Minimax + Alpha-Beta Pac-Man play itself. AI & Soft Computing project.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 16 28 9A14 14 0 1 0 28 23Z' fill='%23ffd23f'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="top">
+  <h1>PAC-MAN <em>vs</em> GHOSTS</h1>
+  <p class="sub">AI Search Lab &middot; ghosts think with <b>A*</b> &middot; Pac-Man can think with <b>Minimax + Alpha-Beta</b></p>
+</header>
+
+<main class="layout">
+  <section>
+    <div class="hud">
+      <div><label>SCORE</label><b id="score">0</b></div>
+      <div><label>BEST</label><b id="best">0</b></div>
+      <div><label>LEVEL</label><b id="level">1</b></div>
+      <div><label>LIVES</label><b id="lives">3</b></div>
+      <div><label>MODE</label><b id="modeLabel">YOU</b></div>
+    </div>
+    <div class="wrap">
+      <canvas id="game"></canvas>
+      <div id="overlay" class="overlay">
+        <h2 id="ovTitle">READY?</h2>
+        <p id="ovSub">Eat every pellet. Four ghosts hunt you with A* path-finding.</p>
+        <button id="ovBtn" class="btn">START GAME</button>
+      </div>
+    </div>
+    <div class="dpad">
+      <button class="u" data-d="U" aria-label="Up">&#9650;</button>
+      <button class="l" data-d="L" aria-label="Left">&#9664;</button>
+      <button class="d" data-d="D" aria-label="Down">&#9660;</button>
+      <button class="r" data-d="R" aria-label="Right">&#9654;</button>
+    </div>
+    <p class="hint">Arrow keys / WASD &middot; swipe on mobile &middot; Space = pause</p>
+  </section>
+
+  <aside>
+    <div class="card">
+      <h3>Who plays Pac-Man?</h3>
+      <p class="tag">Switching restarts the game.</p>
+      <div class="seg">
+        <button id="modePlay" class="on">&#128377; You play</button>
+        <button id="modeAI">&#129302; AI plays (Minimax)</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>&#128123; Ghost brains &mdash; A* Search</h3>
+      <p class="tag">Every ghost re-plans a shortest path to its own target each time it reaches a tile.</p>
+      <div class="row">
+        <label for="heur">Search algorithm</label>
+        <select id="heur">
+          <option value="manh">A* &middot; Manhattan</option>
+          <option value="euclid">A* &middot; Euclidean</option>
+          <option value="weighted">Weighted A* (w = 2.5)</option>
+          <option value="greedy">Greedy Best-First</option>
+          <option value="dijkstra">Dijkstra (h = 0)</option>
+        </select>
+      </div>
+      <div class="row">
+        <label class="chk"><input type="checkbox" id="showPaths" checked> Show planned paths</label>
+        <label class="chk"><input type="checkbox" id="showExp"> Show Blinky's explored nodes</label>
+      </div>
+      <table>
+        <thead><tr><th>Ghost</th><th>Strategy</th><th style="text-align:right">Expanded</th><th style="text-align:right">Path</th></tr></thead>
+        <tbody id="ghostRows"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>&#128269; A* Step Lab<span class="newtag">NEW</span></h3>
+      <p class="tag">Pause the game and watch A* think, one node at a time. Uses the algorithm picked above.</p>
+      <button class="ghostbtn" id="labToggle">Open Step Lab</button>
+      <div id="labBox" hidden>
+        <div class="legend">
+          <span><i class="sw" style="background:rgba(70,255,150,.55)"></i>Open list (frontier)</span>
+          <span><i class="sw" style="background:rgba(255,91,138,.55)"></i>Closed list (expanded)</span>
+          <span><i class="sw" style="border:2px solid #ffd23f"></i>Expanding now</span>
+          <span><i class="sw" style="background:#3ee6ff"></i>Final path</span>
+        </div>
+        <p class="tag" style="margin:4px 0 8px">Numbers on tiles are f = g + h. Small arrows point to each tile's parent.</p>
+        <div class="row">
+          <button class="ghostbtn" id="labStepBtn">Step &#9654;</button>
+          <button class="ghostbtn" id="labAuto">Auto-play</button>
+          <button class="ghostbtn" id="labFinish">Finish</button>
+        </div>
+        <div class="row">
+          <button class="ghostbtn" id="labRestart">Restart</button>
+          <button class="ghostbtn" id="labRandom">Random start / goal</button>
+        </div>
+        <div class="row"><label for="labSpeed">Speed</label><input type="range" id="labSpeed" min="1" max="10" value="5"></div>
+        <div class="readout" id="labMsg"></div>
+        <div class="chips" id="labStats"></div>
+        <div class="readout" id="labQueue" style="color:var(--muted)"></div>
+        <div class="readout" id="labHover" style="color:var(--muted)">Hover a tile to inspect its g, h and f.</div>
+        <p class="tag" style="margin:8px 0 0">Keys: Space or &rarr; = step, Esc = exit lab.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>&#129504; Pac-Man brain &mdash; Minimax + Alpha-Beta</h3>
+      <p class="tag">Active in "AI plays" mode. Pac-Man is MAX; the two nearest dangerous ghosts are MIN. Scared ghosts are treated as targets.</p>
+      <div class="row">
+        <label for="depth">Depth: <b id="depthVal">3</b></label>
+        <input type="range" id="depth" min="1" max="5" value="3">
+        <label class="chk"><input type="checkbox" id="ab" checked> Alpha-Beta pruning</label>
+      </div>
+      <div class="stat">
+        <div><b id="sNodes">&ndash;</b><span>nodes visited</span></div>
+        <div><b id="sPruned">&ndash;</b><span>branches pruned</span></div>
+        <div><b id="sMs">&ndash;</b><span>ms / decision</span></div>
+      </div>
+      <div class="chips" id="chips"></div>
+    </div>
+
+    <div class="card">
+      <h3>&#128300; Experiments (great for the viva)</h3>
+      <p class="tag">Run the algorithms head-to-head on this exact maze.</p>
+      <div class="row">
+        <button class="ghostbtn" id="benchA">Benchmark path-finders</button>
+        <button class="ghostbtn" id="benchM">Minimax vs Alpha-Beta</button>
+      </div>
+      <div class="out" id="benchOut"></div>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>How it works</summary>
+        <ul>
+          <li><b>A*</b> expands the node with the lowest <code>f = g + h</code>, where g is steps walked and h is the Manhattan distance to the target. With an admissible h it always finds a shortest path while expanding far fewer nodes than Dijkstra.</li>
+          <li><b>Four personalities</b> = four different targets fed into the same A*: Blinky targets Pac-Man, Pinky targets 4 tiles ahead, Inky mirrors Blinky around Pac-Man, Clyde chases until he gets close and then retreats to his corner.</li>
+          <li><b>Minimax</b> looks <code>depth</code> rounds ahead (Pac-Man move, then each ghost move) and picks the move with the best worst-case evaluation. The evaluation rewards pellets, penalises nearby ghosts and pulls toward the closest food.</li>
+          <li><b>Alpha-Beta</b> skips branches that cannot change the final choice. Same answer, far fewer nodes &mdash; use the experiment above to see the saving.</li>
+          <li>Power pellets frighten the ghosts, and eaten ghosts use A* to run back home.</li>
+        </ul>
+      </details>
+    </div>
+  </aside>
+</main>
+<footer>CSE3121 &middot; Artificial Intelligence and Soft Computing &middot; Algorithmic Implementation project &mdash; Heuristic Search (A*) &amp; Adversarial Search (Minimax, Alpha-Beta).</footer>
+
+<script src="js/maze.js"></script>
+<script src="js/astar.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ghosts.js"></script>
+<script src="js/minimax.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/experiments.js"></script>
+<script src="js/lab.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
