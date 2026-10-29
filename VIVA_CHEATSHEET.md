@@ -1,6 +1,6 @@
 # Pac-Man vs Ghosts: Viva Cheat-Sheet (CSE3121 AISC)
 
-**One-line pitch:** A Pac-Man game where the ghosts plan routes with **A\* search** (Heuristic Search) and Pac-Man can play itself with **Minimax + Alpha-Beta pruning** (Adversarial Search). Both are in your handout's rubric list.
+**One-line pitch:** A Pac-Man game where the ghosts plan routes with **A\* search** (Heuristic Search) and Pac-Man can play itself with **Minimax + Alpha-Beta pruning** (Adversarial Search). On top of that, **fuzzy logic** sets ghost aggression, a **neural network** predicts Pac-Man's turns for Pinky, and a **genetic algorithm** tunes Minimax's evaluation weights. All five are in your handout's rubric list.
 
 ## 1. Where each algorithm lives (open index.html and point to these)
 | Algorithm | Function in code | What it does in the game |
@@ -9,7 +9,11 @@
 | Heuristic | `heur()` | Manhattan (default), Euclidean, or zero (= Dijkstra) |
 | Minimax | `maxVal()` / `minVal()` | Pac-Man = MAX, ghosts = MIN |
 | Alpha-Beta | the `if (S.ab) {...}` lines in both | Cuts branches that cannot change the decision |
-| Evaluation function | `evaluate()` | Scores a game state for the depth cutoff |
+| Evaluation function | `evaluate()` | Scores a game state for the depth cutoff; its 4 weights are `EW` |
+| Fuzzy logic | `fuzzyEval()` in `fuzzy.js` | Distance, lives, pellets left -> 11 rules -> aggression 0..1 -> ghost speed |
+| Neural network | `nnForward()`, `nnTrain()` in `nn.js` | 17-10-4 MLP predicts Pac-Man's turn at junctions; Pinky aims there |
+| Genetic algorithm | `gaRun()` in `ga.js` | Evolves the 4 evaluation weights; fitness = mean score over seeded games |
+| AI Arena | `arenaRun()` in `arena.js` | Compares two setups on identical seeds, paired difference vs 2 standard errors |
 
 ## 2. A\* in 30 seconds
 - Keeps a priority queue ordered by **f(n) = g(n) + h(n)**.
@@ -41,6 +45,11 @@
 - Minimax at depth 3 from the start position: **270 nodes without pruning, 117 with Alpha-Beta**, same best value.
 - Use the two **Experiments** buttons on the site to reproduce these live in the viva (numbers on screen may differ slightly from the above).
 
+## 4b. Soft-computing numbers (be honest, examiners like it)
+- **GA** (pop 10, 8 generations, 6 games per individual, depth 3, 40 s games): on 12 unseen games the evolved weights averaged **4007** vs **3398** for the hand-tuned ones, but scores ranged 830 to 6460 per game, so the gap is **within noise**. The app states its own verdict after each run. Chromosome = [pellet pull, ghost fear, scared-ghost bonus, power-pellet pull].
+- **Neural net**: after about 5,000 junction decisions it predicts Pac-Man's turn about **50%** of the time vs about **47%** for "keep going straight". Chance level is about 40% (2-3 options). It learns, but only slightly beats the baseline.
+- **Fuzzy**: ghost 2 tiles away and Pac-Man on 1 life gives aggression **1.00**; 15 tiles away, 3 lives, 90% pellets left gives **0.20**. Speed = x(0.88 + 0.24 x aggression).
+
 ## 5. Likely viva questions
 **Q: Why A\* and not BFS or Dijkstra?** BFS/Dijkstra explore in all directions. A\* uses the heuristic to steer toward the goal, so it expands about 3x fewer nodes here while giving the same shortest path.
 
@@ -60,8 +69,20 @@
 
 **Q: How would you improve it?** Iterative deepening, better move ordering, learned evaluation weights (e.g. a neural network or a genetic algorithm tuning the weights), or Monte Carlo Tree Search.
 
-## 5b. Soft computing link (if asked)
-The evaluation weights could be tuned with a **Genetic Algorithm** (syllabus unit: Evolutionary techniques), which would tie this project to a second rubric topic.
+## 5b. Soft computing questions
+**Q: How does the fuzzy system work?** Fuzzification: each crisp input gets a degree (0..1) for sets like Near/Medium/Far using triangular and trapezoidal membership functions. Inference: 11 IF-THEN rules, AND = minimum, so each rule has a firing strength. Defuzzification: weighted average of the rule outputs (Sugeno style: Low 0.2, Medium 0.5, High 0.8, Very high 1.0). Result = aggression.
+
+**Q: Why Sugeno / weighted average and not centroid?** Simpler and cheaper to compute every time a ghost reaches a tile, and the output is a single number we can use directly.
+
+**Q: Describe your neural network.** 17 inputs (per direction: open, pellet closeness, ghost closeness; plus facing direction and a frightened flag), 10 tanh hidden units, softmax over 4 directions (masked to open ones). Trained online by backpropagation with SGD (learning rate 0.1) and cross-entropy loss, using each real Pac-Man decision at a junction plus 3 replayed past examples.
+
+**Q: Did the network help?** It learns (about 50% turn-prediction accuracy vs about 47% for "go straight" over 5,000 decisions) but the gain is small. Honest limits: Minimax Pac-Man's choices depend on ghost positions in ways 17 numbers only partly capture.
+
+**Q: Explain your genetic algorithm.** Population of weight vectors (one of them is the hand-tuned default). Fitness = mean score over seeded fast games (same seeds for everyone in a generation). Each generation: keep the 2 best (elitism), pick parents by tournament selection (k = 3), arithmetic crossover, log-normal mutation, clamp to bounds. After the last generation the champion is tested on unseen seeds against the default.
+
+**Q: Why validate on unseen games?** Fitness is noisy; the best individual of a generation is partly lucky (winner's curse). Unseen seeds tell whether the improvement is real. The app reports the difference with its standard error and says when it is within noise.
+
+**Q: What does the AI Arena prove?** Both setups play the same seeded games, so we compare paired differences; a winner is declared only if the mean difference exceeds 2 standard errors.
 
 ## 6. Tech summary
 Plain HTML + CSS + JavaScript (no frameworks), HTML5 canvas, hosted on Vercel as a static site.

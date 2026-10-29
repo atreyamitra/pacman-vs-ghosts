@@ -1,6 +1,6 @@
 # Project guide (for Claude Code and other contributors)
 
-Pac-Man vs Ghosts: a static browser game for a university AI course. A\* ghosts, Minimax + Alpha-Beta Pac-Man, A\* Step Lab. See `README.md` for features.
+Pac-Man vs Ghosts: a static browser game for a university AI course. A\* ghosts, Minimax + Alpha-Beta Pac-Man, A\* Step Lab, fuzzy-logic ghost aggression, neural-network Pinky, genetic-algorithm weight tuning, AI Arena. See `README.md` for features.
 
 ## Layout
 - `index.html`: markup and the ordered list of `<script>` tags.
@@ -15,12 +15,14 @@ Pac-Man vs Ghosts: a static browser game for a university AI course. A\* ghosts,
 - No build step and no dependencies. Keep it that way: it must open from a plain `index.html`.
 - Keep algorithm code readable. This code is shown and explained in a viva, so prefer clear names and short comments over clever tricks.
 - When changing game logic, run `node tests/headless-test.js` before committing.
+- `sim.js` runs headless seeded games (it swaps `Math.random`, `cfg`, `EW`, fuzzy/NN flags and restores them in `simEnd()`). While a batch runs, `busy.on` freezes the normal loop. Anything new that changes game state must be restored there.
+- Minimax weights live in `EW` (`minimax.js`); the GA and Arena pass weights through `simBegin()`.
+- Report GA/NN/Arena results honestly (see README "Soft-computing results"); do not hard-code claims of improvement.
 
 ## Deploy
-Vercel project `pacman-vs-ghosts` is a static site. Pushing to `main` should deploy it to https://pacman-vs-ghosts.vercel.app (if auto-deploy is not connected, redeploy from the Vercel dashboard).
+Vercel project `pacman-vs-ghosts` is a static site. Pushing to `main` deploys it to https://pacman-vs-ghosts.vercel.app.
 
 ## Ideas backlog
-1. Genetic Algorithm that tunes the Minimax evaluation weights (fitness-vs-generation chart).
-2. Fuzzy-logic ghost aggression (membership-function graphs).
-3. Small neural network that predicts Pac-Man's next turn for one ghost.
-4. Maze editor / more mazes, sound effects, difficulty levels.
+1. Human-controlled ghost mode (play as a ghost against the Minimax Pac-Man).
+2. Power-ups / fruit, maze editor / more mazes.
+3. Sound effects, difficulty levels, polish.
