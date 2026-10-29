@@ -17,10 +17,11 @@ function ahead(n) {
 }
 function chaseTarget(g) {
   const pi = pac.r * W + pac.c;
-  if (game.phase % 2 === 0) return nearestWalk(g.scatter[0], g.scatter[1]); // scatter phase
+  // Scatter phase: ghosts go to their corner, unless fuzzy logic says they are very aggressive right now.
+  if (game.phase % 2 === 0 && !(fuzzy.on && g.agg > 0.75)) return nearestWalk(g.scatter[0], g.scatter[1]);
   switch (g.name) {
     case 'Blinky': return pi;
-    case 'Pinky': { const [c, r] = ahead(4); return r * W + c; }
+    case 'Pinky': if (nn.enabled) return nnTarget(); { const [c, r] = ahead(4); return r * W + c; }
     case 'Inky': { const b = ghosts[0], [ac, ar] = ahead(2); return nearestWalk(b.c + 2 * (ac - b.c), b.r + 2 * (ar - b.r)); }
     default: { const d = dist[pi * N + (g.r * W + g.c)]; return (d > 8 || d === 999) ? pi : nearestWalk(g.scatter[0], g.scatter[1]); }
   }
@@ -31,6 +32,7 @@ function stepDir(c, r, ni) {
   return [dx, nr - r];
 }
 function ghostPlan(g) {
+  if (fuzzy.on) { g.fz = fuzzyForGhost(g); g.agg = g.fz.out; }
   const i = g.r * W + g.c, back = (g.dx || g.dy) ? (g.r - g.dy) * W + wrapC(g.c - g.dx) : -1;
   const inHouse = house[i] || i === doorIdx;
   if (g.state === 'fright' && !inHouse) {
@@ -51,7 +53,7 @@ function ghostPlan(g) {
   [g.dx, g.dy] = stepDir(g.c, g.r, n);
 }
 function updateGhost(g, dt) {
-  if (g.state === 'house') { g.bob += dt * 6; if (game.time >= g.releaseAt) { g.state = game.fright > 0 ? 'fright' : 'normal'; g.dx = g.dy = 0; } return; }
+  if (g.state === 'house') { g.bob += dt * 6; if (game.time >= g.releaseAt) { g.state = (game.fright > 0 && !g.wasEaten) ? 'fright' : 'normal'; g.dx = g.dy = 0; } return; }
   let move = ghostSpeed(g) * dt;
   while (move > 0) {
     if (!g.dx && !g.dy) { ghostPlan(g); if (!g.dx && !g.dy) break; }
@@ -73,7 +75,7 @@ function collisions() {
       if (g.state === 'fright') {
         const pts = 200 * Math.pow(2, game.combo++); addScore(pts);
         popups.push({ x: gx, y: gy, text: String(pts), t: 1 });
-        g.state = 'eaten'; g.path = [];
+        g.state = 'eaten'; g.path = []; g.wasEaten = true; // comes back as a normal ghost: each ghost can be eaten only once per power pellet
       } else { game.state = 'dying'; game.timer = 1.5; return; }
     }
   }

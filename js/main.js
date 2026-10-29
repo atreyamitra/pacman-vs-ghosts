@@ -4,7 +4,8 @@
 
 /* ---------- Boot ---------- */
 resetLevel(); game.state = 'title';
-syncHud(); showOverlay('PAC-MAN vs GHOSTS', 'Eat every pellet. Four ghosts hunt you with A* path-finding. Or let the Minimax AI play for you.', 'START GAME');
+applyWeights();
+syncHud(); showTitle();
 let last = 0, acc = 0;
 function loop(ts) {
   const dt = Math.min(0.05, ((ts - last) / 1000) || 0); last = ts;

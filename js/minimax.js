@@ -5,18 +5,25 @@
 /* ---------- Minimax + Alpha-Beta (Pac-Man AI) ---------- */
 const S = { p: 0, food: new Uint8Array(N), left: 0, score: 0, ghosts: [], ab: true, nodes: 0, pruned: 0, target: -1 };
 const LOSE = d => -100000 - d * 1000;
+// The four numbers the evaluation function is built from. The Genetic Algorithm (ga.js) evolves these.
+//   food   : penalty per tile to the nearest pellet (pulls Pac-Man toward food)
+//   near   : fear of a dangerous ghost, scaled by (8 - distance)^2
+//   scared : bonus for being close to a frightened (edible) ghost
+//   power  : penalty per tile to the nearest power pellet while a ghost is close
+const EW_DEFAULT = { food: 1.6, near: 3, scared: 30, power: 2.5 };
+let EW = Object.assign({}, EW_DEFAULT);
 function evaluate() {
   if (S.left === 0) return S.score + 5000;
   let s = S.score; const base = S.p * N;
   let df = 999; for (const f of foodCells) if (S.food[f]) { const d = dist[base + f]; if (d < df) df = d; }
-  s -= df * 1.6;
+  s -= df * EW.food;
   let near = 999;
   for (const g of S.ghosts) {
     if (g.dead) continue; const d = dist[base + g.idx];
-    if (g.scared) s += 30 / (d + 1);
-    else { if (d < near) near = d; if (d <= 1) s -= 500; else if (d < 8) s -= (8 - d) * (8 - d) * 3; }
+    if (g.scared) s += EW.scared / (d + 1);
+    else { if (d < near) near = d; if (d <= 1) s -= 500; else if (d < 8) s -= (8 - d) * (8 - d) * EW.near; }
   }
-  if (near <= 5) { let pd = 999; for (const pc of powerCells) if (S.food[pc]) { const d = dist[base + pc]; if (d < pd) pd = d; } if (pd < 999) s -= pd * 2.5; }
+  if (near <= 5) { let pd = 999; for (const pc of powerCells) if (S.food[pc]) { const d = dist[base + pc]; if (d < pd) pd = d; } if (pd < 999) s -= pd * EW.power; }
   return s;
 }
 function sortBy(arr, key) { const a = arr.slice(); for (let i = 1; i < a.length; i++) { const v = a[i], k = key(v); let j = i - 1; while (j >= 0 && key(a[j]) > k) { a[j + 1] = a[j]; j--; } a[j + 1] = v; } return a; }
@@ -88,5 +95,6 @@ function aiSearch(depth, useAB) {
 let lastAI = null;
 function aiPick() {
   lastAI = aiSearch(cfg.depth, cfg.ab);
+  if (sim.active) { sim.decisions++; sim.nodes += lastAI.nodes; sim.ms += lastAI.ms; }
   if (lastAI.move) { pac.qx = lastAI.move[0]; pac.qy = lastAI.move[1]; }
 }

@@ -3,7 +3,7 @@
 // Loaded as a classic <script> (see index.html for load order); globals are shared between files.
 
 /* ---------- Game state ---------- */
-const cfg = { mode: 'play', heur: 'manh', showPaths: true, showExp: false, depth: 3, ab: true };
+const cfg = { mode: 'play', heur: 'manh', showPaths: true, showExp: false, depth: 3, ab: true, useEvolved: false };
 const game = { state: 'title', paused: false, score: 0, best: 0, lives: 3, level: 1, pellets: new Uint8Array(N), left: 0,
   time: 0, anim: 0, phase: 0, phaseT: 0, fright: 0, combo: 0, timer: 0, flash: 0 };
 try { game.best = +localStorage.getItem('pacvsghosts-best') || 0; } catch (e) {}
@@ -16,9 +16,11 @@ const GDEF = [
   { name: 'Clyde',  color: '#ffa43b', role: 'Shy · retreats when close', scatter: [1, 19], rel: 8 }
 ];
 const ghosts = GDEF.map(d => Object.assign({ c: 9, r: 9, dx: 0, dy: 0, p: 0, state: 'house', releaseAt: 0, path: [], explored: [],
-  expanded: 0, plen: 0, sumExp: 0, plans: 0, target: [0, 0], bob: Math.random() * 6 }, d));
+  expanded: 0, plen: 0, sumExp: 0, plans: 0, target: [0, 0], bob: Math.random() * 6, agg: 0.5, fz: null }, d));
 const popups = [];
-const ghostSpeed = g => g.state === 'eaten' ? 11 : g.state === 'fright' ? 3.4 : Math.min(7.2, 5.6 + 0.3 * (game.level - 1));
+// With fuzzy aggression on, a ghost's normal speed is scaled by 0.88 .. 1.12 depending on its fuzzy "aggression" (0 .. 1).
+const ghostSpeed = g => g.state === 'eaten' ? 11 : g.state === 'fright' ? 3.4
+  : Math.min(7.2, 5.6 + 0.3 * (game.level - 1)) * (fuzzy.on ? 0.88 + 0.24 * g.agg : 1);
 const pacSpeed = () => 6.8;
 
 function resetPositions() {
@@ -27,13 +29,14 @@ function resetPositions() {
   ghosts.forEach((g, i) => {
     const start = i === 0 ? [9, 7] : [[0, 0], [9, 9], [8, 9], [10, 9]][i];
     Object.assign(g, { c: start[0], r: start[1], dx: 0, dy: 0, p: 0, state: i === 0 ? 'normal' : 'house',
-      releaseAt: game.time + g.rel * f, path: [], explored: [] });
+      releaseAt: game.time + g.rel * f, path: [], explored: [], wasEaten: false });
   });
   game.fright = 0; game.combo = 0; game.phase = 0; game.phaseT = 0;
   game.state = 'ready'; game.timer = 1.6;
 }
 function resetLevel() { game.pellets.set(pelletInit); game.left = foodCells.length; popups.length = 0; resetPositions(); }
 function startGame() {
+  if (busy.on) return; // a training / arena batch owns the game state
   game.score = 0; game.lives = 3; game.level = 1; game.time = 0; game.paused = false;
   resetLevel(); hideOverlay(); syncHud(true);
 }
@@ -45,10 +48,13 @@ function canMove(c, r, dx, dy) {
   return !!pacWalk[nr * W + wrapC(c + dx)];
 }
 function pacChoose() {
+  // The neural-network ghost watches every junction decision: predict first, then learn from what Pac-Man really did.
+  const watch = nn.enabled && pac.p === 0 ? nnObserveBefore() : null;
   if (cfg.mode === 'ai') aiPick();
   if (canMove(pac.c, pac.r, pac.qx, pac.qy)) { pac.dx = pac.qx; pac.dy = pac.qy; }
   else if ((pac.dx || pac.dy) && !canMove(pac.c, pac.r, pac.dx, pac.dy)) { pac.dx = 0; pac.dy = 0; }
   if (pac.dx || pac.dy) { pac.fx = pac.dx; pac.fy = pac.dy; }
+  if (watch) nnObserveAfter(watch);
 }
 function setDir(dx, dy) {
   if (cfg.mode !== 'play') return;
@@ -65,10 +71,11 @@ function eatAt(i) {
 }
 function addScore(n) {
   game.score += n;
-  if (game.score > game.best) { game.best = game.score; try { localStorage.setItem('pacvsghosts-best', game.best); } catch (e) {} }
+  if (game.score > game.best) { game.best = game.score; if (!sim.active) { try { localStorage.setItem('pacvsghosts-best', game.best); } catch (e) {} } }
 }
 function startFright() {
   game.fright = Math.max(3, 7 - 0.5 * (game.level - 1)); game.combo = 0;
+  for (const g of ghosts) g.wasEaten = false;
   for (const g of ghosts) if (g.state === 'normal') {
     g.state = 'fright';
     if ((g.dx || g.dy) && g.p > 0) { g.c = wrapC(g.c + g.dx); g.r += g.dy; g.p = 1 - g.p; g.dx = -g.dx; g.dy = -g.dy; }
@@ -86,7 +93,7 @@ function updatePac(dt) {
 
 /* ---------- Update loop ---------- */
 function update(dt) {
-  if (lab.active) return;
+  if (lab.active || (busy.on && !sim.stepping)) return; // frozen by the Step Lab or by a background batch (the batch steps it itself)
   if (game.state === 'title' || game.state === 'over' || game.paused) return;
   game.anim += dt;
   if (game.state === 'ready') { game.timer -= dt; if (game.timer <= 0) game.state = 'playing'; return; }

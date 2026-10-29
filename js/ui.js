@@ -6,21 +6,22 @@
 const $ = id => document.getElementById(id);
 const ov = $('overlay');
 let ovAction = startGame;
-function showOverlay(t, s, b, action) { $('ovTitle').textContent = t; $('ovSub').textContent = s; $('ovBtn').textContent = b; ovAction = action || startGame; ov.classList.remove('hidden'); }
+function showOverlay(t, s, b, action) { if (sim.active) return; $('ovTitle').textContent = t; $('ovSub').textContent = s; $('ovBtn').textContent = b; ovAction = action || startGame; ov.classList.remove('hidden'); }
 function hideOverlay() { ov.classList.add('hidden'); }
+function showTitle() { showOverlay('PAC-MAN vs GHOSTS', 'Eat every pellet. Four ghosts hunt you with A* path-finding. Or let the Minimax AI play for you.', 'START GAME'); }
 function syncHud(force) {
   $('score').textContent = game.score; $('best').textContent = game.best; $('level').textContent = game.level;
   $('lives').textContent = game.lives > 0 ? '● '.repeat(game.lives).trim() : '–';
   $('modeLabel').textContent = cfg.mode === 'ai' ? 'AI' : 'YOU';
 }
 function togglePause() {
-  if (lab.active) return;
+  if (lab.active || busy.on) return;
   if (game.state !== 'playing' && game.state !== 'ready') return;
   if (game.paused) { game.paused = false; hideOverlay(); }
   else { game.paused = true; showOverlay('PAUSED', 'Take a breath. The ghosts are waiting.', 'RESUME', () => { game.paused = false; hideOverlay(); }); }
 }
 $('ovBtn').addEventListener('click', () => ovAction());
-function setMode(m) { cfg.mode = m; $('modePlay').classList.toggle('on', m === 'play'); $('modeAI').classList.toggle('on', m === 'ai'); startGame(); }
+function setMode(m) { if (busy.on) return; cfg.mode = m; $('modePlay').classList.toggle('on', m === 'play'); $('modeAI').classList.toggle('on', m === 'ai'); startGame(); }
 $('modePlay').addEventListener('click', () => setMode('play'));
 $('modeAI').addEventListener('click', () => setMode('ai'));
 $('heur').addEventListener('change', e => { cfg.heur = e.target.value; if (lab.active && lab.s >= 0 && lab.t >= 0) { labStop(); labInit(); } });
@@ -31,6 +32,7 @@ $('ab').addEventListener('change', e => { cfg.ab = e.target.checked; });
 
 const KEYS = { ArrowUp: [0, -1], w: [0, -1], W: [0, -1], ArrowDown: [0, 1], s: [0, 1], S: [0, 1], ArrowLeft: [-1, 0], a: [-1, 0], A: [-1, 0], ArrowRight: [1, 0], d: [1, 0], D: [1, 0] };
 window.addEventListener('keydown', e => {
+  if (busy.on) { if (KEYS[e.key] || e.key === ' ') e.preventDefault(); return; }
   if (lab.active) {
     if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'n' || e.key === 'N') { e.preventDefault(); labStep(); }
     else if (e.key === 'Escape') labExit();
@@ -58,6 +60,8 @@ const rows = ghosts.map(g => {
 });
 function uiPanel() {
   ghosts.forEach((g, i) => { const c = rows[i].children; c[2].textContent = g.plans ? g.expanded + ' (avg ' + Math.round(g.sumExp / g.plans) + ')' : '–'; c[3].textContent = g.plans ? g.plen : '–'; });
+  rows[1].children[1].textContent = nn.enabled ? 'Ambusher · neural net predicts your turn' : GDEF[1].role;
+  uiExtra();
   if (lastAI) {
     $('sNodes').textContent = lastAI.nodes.toLocaleString(); $('sPruned').textContent = lastAI.pruned.toLocaleString(); $('sMs').textContent = lastAI.ms.toFixed(1);
     const names = { '0,-1': '↑ Up', '0,1': '↓ Down', '-1,0': '← Left', '1,0': '→ Right' };
