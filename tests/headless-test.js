@@ -18,14 +18,14 @@ function makeEl() {
 const els = {};
 global.document = { getElementById: id => els[id] || (els[id] = makeEl()), createElement: makeEl, querySelectorAll: () => [], addEventListener() {}, hidden: false };
 global.window = { devicePixelRatio: 1, addEventListener() {} };
-global.localStorage = { getItem() { return null; }, setItem() {} };
+global.localStorage = { getItem() { return null; }, setItem() {}, removeItem() {} };
 global.requestAnimationFrame = () => {};
 
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const files = [...html.matchAll(/<script src="(js\/[^"]+)"><\/script>/g)].map(m => m[1]);
 if (!files.length) throw new Error('No <script src> tags found in index.html');
 for (const f of files) vm.runInThisContext(fs.readFileSync(path.join(root, f), 'utf8'), { filename: f });
-vm.runInThisContext('globalThis.__pac = { game, pac, ghosts, cfg, update, astar, aiSearch, ASTAR_MODES, dist, adjP, N, W, walkList, startGame, lab, labInit, labStep, foodCells };');
+vm.runInThisContext('globalThis.__pac = { game, pac, ghosts, cfg, update, astar, aiSearch, ASTAR_MODES, dist, adjP, N, W, walkList, startGame, lab, labInit, labStep, foodCells, fuzzyEval, FZ_RULES, simRunSync, EW_DEFAULT, getEW: () => EW, nn, nnFeatures, nnForward, nnTrain, mulberry32, busy, sim, gaRun, ga, GA_KEYS, GA_BOUNDS, arenaCompare, fuzzy };');
 const P = globalThis.__pac;
 
 let failed = 0;
@@ -73,5 +73,47 @@ for (let i = 0; i < 120; i++) P.update(1 / 60);
 check('game paused while Step Lab active', P.game.score === before && P.pac.c === col);
 P.lab.active = false;
 
-console.log(failed ? '\n' + failed + ' check(s) FAILED' : '\nAll checks passed');
-process.exit(failed ? 1 : 0);
+// 6. Fuzzy logic: output stays in [0, 1] and behaves sensibly
+let fzOk = true;
+for (let d = 0; d <= 40; d += 2) for (const l of [1, 2, 3]) for (const p of [0, 0.2, 0.5, 1]) { const o = P.fuzzyEval(d, l, p).out; if (!(o >= 0 && o <= 1)) fzOk = false; }
+check('fuzzy aggression always within 0..1', fzOk);
+check('fuzzy: near + last life is more aggressive than far + full lives',
+  P.fuzzyEval(2, 1, 0.5).out > P.fuzzyEval(18, 3, 0.9).out, P.fuzzyEval(2, 1, 0.5).out.toFixed(2) + ' vs ' + P.fuzzyEval(18, 3, 0.9).out.toFixed(2));
+
+// 7. Simulation harness: repeatable with the same seed, and restores global state afterwards
+const setup = { depth: 2, weights: P.EW_DEFAULT, heur: 'manh' };
+const rand0 = Math.random, mode0 = P.cfg.mode, ew0 = JSON.stringify(P.getEW());
+const r1 = P.simRunSync(setup, 123, 15), r2 = P.simRunSync(setup, 123, 15), r3 = P.simRunSync(setup, 124, 15);
+check('same seed gives identical game', r1.score === r2.score && r1.time === r2.time, r1.score + ' = ' + r2.score);
+check('different seed gives a different game', r1.score !== r3.score || r1.time !== r3.time);
+check('simulation restores Math.random, mode and weights', Math.random === rand0 && P.cfg.mode === mode0 && JSON.stringify(P.getEW()) === ew0 && !P.sim.active);
+
+// 8. Neural network: probabilities sum to 1 over open directions, and training lowers the loss
+{
+  const F = P.nnFeatures(P.pac.c, P.pac.r, -1, 0), { p } = P.nnForward(F.x, F.open);
+  const sum = p.reduce((a, b) => a + b, 0), openOk = p.every((v, k) => F.open[k] || v === 0);
+  check('NN softmax sums to 1 and ignores walls', Math.abs(sum - 1) < 1e-9 && openOk, sum.toFixed(6));
+  const y = F.open.findIndex(v => v === 1);
+  const first = P.nnTrain(F.x, F.open, y); let last = first; for (let i = 0; i < 80; i++) last = P.nnTrain(F.x, F.open, y);
+  check('NN backpropagation reduces loss', last < first, first.toFixed(3) + ' -> ' + last.toFixed(3));
+}
+
+// 9. Arena statistics
+{
+  const same = P.arenaCompare({ scores: [10, 20, 30, 40] }, { scores: [10, 20, 30, 40] });
+  const better = P.arenaCompare({ scores: [110, 120, 135, 140] }, { scores: [10, 20, 30, 40] });
+  check('Arena: identical setups are not a clear win', !same.clear);
+  check('Arena: consistent +100 gain is flagged as clear', better.clear && better.winner === 'A');
+}
+
+// 10. Genetic algorithm (tiny run): finishes, weights stay in bounds, game state is restored
+(async () => {
+  const res = await P.gaRun({ pop: 4, gens: 2, seeds: 1, maxT: 8, depth: 1, valSeeds: 2, seed: 42 });
+  const inBounds = P.GA_KEYS.every(k => res.weights[k] >= P.GA_BOUNDS[k][0] && res.weights[k] <= P.GA_BOUNDS[k][1]);
+  check('GA finishes with in-bounds weights', !!res && inBounds && res.history.length === 2 && res.validation.evolved.length === 2);
+  check('GA leaves no busy/sim state behind', !P.busy.on && !P.sim.active && !P.ga.running && Math.random === rand0 && JSON.stringify(P.getEW()) === ew0 && P.game.state === 'title');
+  const res2 = await P.gaRun({ pop: 4, gens: 2, seeds: 1, maxT: 8, depth: 1, valSeeds: 2, seed: 42 });
+  check('GA is repeatable with the same seed', JSON.stringify(res2.weights) === JSON.stringify(res.weights));
+  console.log(failed ? '\n' + failed + ' check(s) FAILED' : '\nAll checks passed');
+  process.exit(failed ? 1 : 0);
+})();
