@@ -13,7 +13,7 @@
 <body>
 <header class="top">
   <h1>PAC-MAN <em>vs</em> GHOSTS</h1>
-  <p class="sub">AI Search Lab &middot; ghosts think with <b>A*</b> &middot; Pac-Man can think with <b>Minimax + Alpha-Beta</b></p>
+  <p class="sub">AI Search Lab &middot; ghosts think with <b>A*</b>, <b>fuzzy logic</b> and a <b>neural net</b> &middot; Pac-Man thinks with <b>Minimax + Alpha-Beta</b>, tuned by a <b>genetic algorithm</b></p>
 </header>
 
 <main class="layout">
@@ -31,6 +31,13 @@
         <h2 id="ovTitle">READY?</h2>
         <p id="ovSub">Eat every pellet. Four ghosts hunt you with A* path-finding.</p>
         <button id="ovBtn" class="btn">START GAME</button>
+      </div>
+      <div id="busyBar" class="busybar" hidden>
+        <h2>BACKGROUND RUN</h2>
+        <p id="busyText">Working&hellip;</p>
+        <div class="bar"><i id="busyFill"></i></div>
+        <p class="tag" id="busyNote">Games are simulated headlessly with fixed random seeds, so the same run always gives the same result.</p>
+        <button class="ghostbtn" id="busyCancel">Cancel</button>
       </div>
     </div>
     <div class="dpad">
@@ -122,6 +129,71 @@
     </div>
 
     <div class="card">
+      <h3>&#127922; Fuzzy-logic ghosts<span class="newtag">NEW</span></h3>
+      <p class="tag">Soft Computing &middot; Fuzzy Logic. Each ghost fuzzifies its distance to Pac-Man, Pac-Man's lives and the pellets left, fires 11 IF-THEN rules and defuzzifies them into an <b>aggression</b> from 0 to 1. Aggressive ghosts run up to 12% faster and skip their scatter phase; timid ones are up to 12% slower.</p>
+      <label class="chk"><input type="checkbox" id="fuzzyOn"> Enable fuzzy aggression</label>
+      <div class="row"><label for="fuzzyGhost">Inspect</label><select id="fuzzyGhost"></select></div>
+      <div id="fuzzyBox">
+        <div class="readout" id="fuzzyNow">Switch it on and start a game to see live values.</div>
+        <div class="fzgraphs" id="fzGraphs"></div>
+        <div class="fzrules" id="fzRules"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>&#129302; Neural-network ghost<span class="newtag">NEW</span></h3>
+      <p class="tag">Soft Computing &middot; Neural Networks. A small MLP (17 &rarr; 10 tanh &rarr; 4 softmax) learns from backpropagation which way Pac-Man turns at junctions. Pinky then ambushes the <i>predicted</i> spot instead of "4 tiles ahead". It learns while you play and keeps what it learned in this browser.</p>
+      <label class="chk"><input type="checkbox" id="nnOn"> Pinky uses the neural network</label>
+      <div class="stat">
+        <div><b id="nnSamples">0</b><span>junctions seen</span></div>
+        <div><b id="nnAcc">&ndash;</b><span>net accuracy (last 100)</span></div>
+        <div><b id="nnBase">&ndash;</b><span>"go straight" baseline</span></div>
+      </div>
+      <canvas id="nnChart" class="spark" width="480" height="110"></canvas>
+      <p class="tag" id="nnNote" style="margin:6px 0 0">Accuracy is measured on each decision <i>before</i> the network learns from it. It only learns while Pinky's network is switched on, and it learns from whoever plays Pac-Man (you or Minimax).</p>
+      <div class="row"><button class="ghostbtn" id="nnReset">Forget what it learned</button></div>
+    </div>
+
+    <div class="card">
+      <h3>&#129516; Genetic Algorithm trainer<span class="newtag">NEW</span></h3>
+      <p class="tag">Soft Computing &middot; Genetic Algorithm. Evolves the 4 weights Minimax uses to judge a position. Fitness = average score over fast seeded background games. Then the champion is tested on games it has never seen.</p>
+      <div class="row">
+        <label for="gaPop">Population</label><input type="number" id="gaPop" min="4" max="24" value="10" class="num">
+        <label for="gaGens">Generations</label><input type="number" id="gaGens" min="2" max="20" value="8" class="num">
+      </div>
+      <div class="row">
+        <label for="gaSeeds">Games / individual</label><input type="number" id="gaSeeds" min="1" max="10" value="5" class="num">
+        <label for="gaVal">Validation games</label><input type="number" id="gaVal" min="4" max="30" value="12" class="num">
+      </div>
+      <div class="row">
+        <button class="btn small" id="gaRun">Train</button>
+        <button class="ghostbtn" id="gaForget">Forget evolved weights</button>
+      </div>
+      <canvas id="gaChart" class="spark" width="480" height="150"></canvas>
+      <div id="gaOut" class="out"></div>
+      <label class="chk" id="gaUseRow" hidden><input type="checkbox" id="gaUse"> Use the evolved weights when the AI plays</label>
+    </div>
+
+    <div class="card">
+      <h3>&#9876;&#65039; AI Arena<span class="newtag">NEW</span></h3>
+      <p class="tag">Compare two Pac-Man AI setups on <b>identical seeded games</b> (A then B on each seed) and see whether the difference is real or luck. Ghosts use the path-finder chosen in the A* card.</p>
+      <div class="arena">
+        <div><b>Setup A</b>
+          <select id="arA_depth"><option value="1">Depth 1</option><option value="2">Depth 2</option><option value="3" selected>Depth 3</option><option value="4">Depth 4</option></select>
+          <select id="arA_w"><option value="default">Default weights</option><option value="evolved">Evolved weights</option></select>
+        </div>
+        <div><b>Setup B</b>
+          <select id="arB_depth"><option value="1">Depth 1</option><option value="2" selected>Depth 2</option><option value="3">Depth 3</option><option value="4">Depth 4</option></select>
+          <select id="arB_w"><option value="default">Default weights</option><option value="evolved">Evolved weights</option></select>
+        </div>
+      </div>
+      <div class="row"><label for="arN">Games</label><input type="number" id="arN" min="3" max="40" value="12" class="num">
+        <label for="arT">Max seconds / game</label><input type="number" id="arT" min="10" max="120" value="40" class="num"></div>
+      <div class="row"><button class="btn small" id="arRun">Run arena</button></div>
+      <div id="arOut" class="out"></div>
+    </div>
+
+    <div class="card">
       <h3>&#128300; Experiments (great for the viva)</h3>
       <p class="tag">Run the algorithms head-to-head on this exact maze.</p>
       <div class="row">
@@ -139,21 +211,30 @@
           <li><b>Four personalities</b> = four different targets fed into the same A*: Blinky targets Pac-Man, Pinky targets 4 tiles ahead, Inky mirrors Blinky around Pac-Man, Clyde chases until he gets close and then retreats to his corner.</li>
           <li><b>Minimax</b> looks <code>depth</code> rounds ahead (Pac-Man move, then each ghost move) and picks the move with the best worst-case evaluation. The evaluation rewards pellets, penalises nearby ghosts and pulls toward the closest food.</li>
           <li><b>Alpha-Beta</b> skips branches that cannot change the final choice. Same answer, far fewer nodes &mdash; use the experiment above to see the saving.</li>
-          <li>Power pellets frighten the ghosts, and eaten ghosts use A* to run back home.</li>
+          <li>Power pellets frighten the ghosts, and eaten ghosts use A* to run back home. Each ghost can be eaten once per power pellet.</li>
+          <li><b>Fuzzy logic</b> turns crisp numbers (distance, lives, pellets left) into degrees of "Near / Medium / Far" etc., fires IF-THEN rules (AND = min) and averages their outputs (Sugeno style) into one aggression value.</li>
+          <li><b>Neural network</b>: a 17-10-4 MLP trained online by backpropagation (SGD, cross-entropy) predicts Pac-Man's turn at junctions; Pinky aims at the predicted tile.</li>
+          <li><b>Genetic Algorithm</b>: chromosome = 4 Minimax weights; elitism (2), tournament selection (k = 3), arithmetic crossover, log-normal mutation; fitness = mean score over seeded games; champion validated on unseen games.</li>
         </ul>
       </details>
     </div>
   </aside>
 </main>
-<footer>CSE3121 &middot; Artificial Intelligence and Soft Computing &middot; Algorithmic Implementation project &mdash; Heuristic Search (A*) &amp; Adversarial Search (Minimax, Alpha-Beta).</footer>
+<footer>CSE3121 &middot; Artificial Intelligence and Soft Computing &middot; Algorithmic Implementation project &mdash; Heuristic Search (A*), Adversarial Search (Minimax, Alpha-Beta), Fuzzy Logic, Neural Network, Genetic Algorithm.</footer>
 
 <script src="js/maze.js"></script>
 <script src="js/astar.js"></script>
 <script src="js/game.js"></script>
 <script src="js/ghosts.js"></script>
 <script src="js/minimax.js"></script>
+<script src="js/fuzzy.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/nn.js"></script>
+<script src="js/ga.js"></script>
+<script src="js/arena.js"></script>
 <script src="js/render.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/panels.js"></script>
 <script src="js/experiments.js"></script>
 <script src="js/lab.js"></script>
 <script src="js/main.js"></script>
