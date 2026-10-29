@@ -129,6 +129,19 @@
     </div>
 
     <div class="card">
+      <h3>&#128300; Experiments (great for the viva)</h3>
+      <p class="tag">Run the algorithms head-to-head on this exact maze.</p>
+      <div class="row">
+        <button class="ghostbtn" id="benchA">Benchmark path-finders</button>
+        <button class="ghostbtn" id="benchM">Minimax vs Alpha-Beta</button>
+      </div>
+      <div class="out" id="benchOut"></div>
+    </div>
+
+    <details class="extras">
+      <summary>&#10024; Soft Computing extras <span class="newtag">OPTIONAL</span><small>Fuzzy logic &middot; Neural network &middot; Genetic algorithm &middot; AI Arena</small></summary>
+
+    <div class="card">
       <h3>&#127922; Fuzzy-logic ghosts<span class="newtag">NEW</span></h3>
       <p class="tag">Soft Computing &middot; Fuzzy Logic. Each ghost fuzzifies its distance to Pac-Man, Pac-Man's lives and the pellets left, fires 11 IF-THEN rules and defuzzifies them into an <b>aggression</b> from 0 to 1. Aggressive ghosts run up to 12% faster and skip their scatter phase; timid ones are up to 12% slower.</p>
       <label class="chk"><input type="checkbox" id="fuzzyOn"> Enable fuzzy aggression</label>
@@ -192,16 +205,7 @@
       <div class="row"><button class="btn small" id="arRun">Run arena</button></div>
       <div id="arOut" class="out"></div>
     </div>
-
-    <div class="card">
-      <h3>&#128300; Experiments (great for the viva)</h3>
-      <p class="tag">Run the algorithms head-to-head on this exact maze.</p>
-      <div class="row">
-        <button class="ghostbtn" id="benchA">Benchmark path-finders</button>
-        <button class="ghostbtn" id="benchM">Minimax vs Alpha-Beta</button>
-      </div>
-      <div class="out" id="benchOut"></div>
-    </div>
+    </details>
 
     <div class="card">
       <details>
